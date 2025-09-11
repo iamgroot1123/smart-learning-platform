@@ -1,0 +1,7 @@
+transformers
+torch
+scikit-learn
+sentence-transformers
+streamlit
+PyPDF2
+pdfplumber
