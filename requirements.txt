@@ -5,3 +5,4 @@ sentence-transformers
 streamlit
 PyPDF2
 pdfplumber
+pymupdf
