@@ -4,7 +4,7 @@ import os
 import re
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from src.preprocessing.extract_text import extract_text_from_pdf
-from src.question_generation.highlight import highlight_answer, _SPACY_AVAILABLE
+from src.question_generation.highlight import _SPACY_AVAILABLE
 from src.question_generation.mcq import generate_mcq_with_options
 from src.question_generation.short import generate_short_question
 
@@ -36,6 +36,15 @@ def clean_pdf_prefix(text: str) -> str:
     """
     return re.sub(r"\[[^\]]+\.pdf\]\s*", "", text)
 
+def clean_chunk_text(text):
+    # Remove PDF tags
+    text = re.sub(r"\[[^\]]+\.pdf\]\s*", "", text)
+    # Remove bullets, special chars
+    text = re.sub(r"[•\-\*\n]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
 
 # --- Real Question Generation using T5 ---
 
@@ -50,9 +59,6 @@ tokenizer, model = load_qg_model()
 
 
 def generate_questions(chunks, num_mcq=5, num_short=5):
-    """
-    Generate MCQs and short-answer questions for a list of text chunks.
-    """
     questions = []
 
     mcq_chunks = chunks[:num_mcq]
@@ -60,7 +66,8 @@ def generate_questions(chunks, num_mcq=5, num_short=5):
 
     # MCQs
     for i, chunk in enumerate(mcq_chunks, 1):
-        clean_chunk = clean_pdf_prefix(chunk)
+        #clean_chunk = clean_pdf_prefix(chunk)
+        clean_chunk = clean_chunk_text(chunk)
         mcq = generate_mcq_with_options(clean_chunk, tokenizer, model)
         if mcq:
             mcq["id"] = i
@@ -73,7 +80,7 @@ def generate_questions(chunks, num_mcq=5, num_short=5):
         if sa:
             sa["id"] = i
             questions.append(sa)
-            
+
     return questions
 
 
