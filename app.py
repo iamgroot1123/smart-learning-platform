@@ -4,8 +4,10 @@ import os
 import re
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from src.preprocessing.extract_text import extract_text_from_pdf
-from src.question_generation.highlight import highlight_answer
+from src.question_generation.highlight import highlight_answer, _SPACY_AVAILABLE
 from src.question_generation.mcq import generate_mcq_with_options
+from src.question_generation.short import generate_short_question
+
 
 # --------- Sentence Splitting + Sliding Window ---------
 _SENT_SPLIT_RE = re.compile(r'(?<=[\.\?\!])\s+(?=[A-Z0-9\"\'\(\[])')
@@ -28,6 +30,13 @@ def sliding_window_chunk_sentences(text: str, chunk_size=6, overlap=2):
         i += (chunk_size - overlap)
     return chunks
 
+def clean_pdf_prefix(text: str) -> str:
+    """
+    Remove PDF filename tags like [Constituency Grammars.pdf] from the text.
+    """
+    return re.sub(r"\[[^\]]+\.pdf\]\s*", "", text)
+
+
 # --- Real Question Generation using T5 ---
 
 # Load once (can take a few seconds)
@@ -40,43 +49,33 @@ def load_qg_model(model_name="valhalla/t5-base-qg-hl"):
 tokenizer, model = load_qg_model()
 
 
-def generate_questions(chunks, num_mcq=5, num_short=5, max_input_length=512):
+def generate_questions(chunks, num_mcq=5, num_short=5):
+    """
+    Generate MCQs and short-answer questions for a list of text chunks.
+    """
     questions = []
+
     mcq_chunks = chunks[:num_mcq]
-    short_chunks = chunks[num_mcq:num_mcq + num_short]
+    short_chunks = chunks[num_mcq:num_mcq+num_short]
 
-    def qg_from_text(text):
-        input_text = f"generate question: {text}"
-        inputs = tokenizer.encode(
-            input_text, return_tensors="pt", max_length=max_input_length, truncation=True
-        )
-        outputs = model.generate(inputs, max_length=64, num_beams=4, early_stopping=True)
-        return tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-    # MCQs with options
+    # MCQs
     for i, chunk in enumerate(mcq_chunks, 1):
-        mcq = generate_mcq_with_options(chunk, tokenizer, model, max_input_length=max_input_length)
+        clean_chunk = clean_pdf_prefix(chunk)
+        mcq = generate_mcq_with_options(clean_chunk, tokenizer, model)
         if mcq:
-            questions.append({
-                "type": "mcq",
-                "id": i,
-                "question": mcq["question"],
-                "options": mcq["options"],
-                "answer": mcq["answer"]
-            })
+            mcq["id"] = i
+            questions.append(mcq)
 
     # Short-answer
     for i, chunk in enumerate(short_chunks, 1):
-        highlighted = highlight_answer(chunk, use_spacy=True)
-        if highlighted:
-            question = qg_from_text(highlighted)
-            questions.append({
-                "type": "short",
-                "id": i,
-                "question": question
-            })
-
+        clean_chunk = clean_pdf_prefix(chunk)
+        sa = generate_short_question(clean_chunk, tokenizer, model)
+        if sa:
+            sa["id"] = i
+            questions.append(sa)
+            
     return questions
+
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Smart Learning Platform", layout="wide")
@@ -149,13 +148,11 @@ if uploaded_files and st.button("🔍 Extract & Generate Questions"):
 
     for q in questions:
         if q["type"] == "mcq":
-            st.markdown(f"**MCQ {q['id']}: {q['question']}**")
-            for idx, option in enumerate(q["options"], 1):
-                # Use letters A, B, C, D…
-                letter = chr(64 + idx)  # 65 is 'A'
-                st.markdown(f"{letter}) {option}")
-            st.markdown(f"**Answer:** {chr(64 + q['options'].index(q['answer']) + 1)}")
-            st.markdown("---")  # separator
-        elif q["type"] == "short":
-            st.markdown(f"**Short Q {q['id']}: {q['question']}**")
-            st.markdown("---")
+            st.write(f"MCQ {q['id']}: {q['question']}")
+            option_labels = ["A", "B", "C", "D"]
+            for idx, opt in enumerate(q["options"]):
+                st.write(f"{option_labels[idx]}) {opt}")
+            correct_idx = q["options"].index(q["answer"])
+            st.write(f"Answer: {option_labels[correct_idx]}")
+        else:
+            st.write(f"Short Q {q['id']}: {q['question']}")
