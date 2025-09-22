@@ -6,3 +6,6 @@ streamlit
 PyPDF2
 pdfplumber
 pymupdf
+sentencepiece
+sentence-transformers
+spacy

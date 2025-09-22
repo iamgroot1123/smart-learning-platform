@@ -2,7 +2,10 @@ import streamlit as st
 import tempfile
 import os
 import re
+from transformers import T5ForConditionalGeneration, T5Tokenizer
 from src.preprocessing.extract_text import extract_text_from_pdf
+from src.question_generation.highlight import highlight_answer
+from src.question_generation.mcq import generate_mcq_with_options
 
 # --------- Sentence Splitting + Sliding Window ---------
 _SENT_SPLIT_RE = re.compile(r'(?<=[\.\?\!])\s+(?=[A-Z0-9\"\'\(\[])')
@@ -25,16 +28,55 @@ def sliding_window_chunk_sentences(text: str, chunk_size=6, overlap=2):
         i += (chunk_size - overlap)
     return chunks
 
-# --- Placeholder question generation ---
-def generate_mock_questions(paragraphs, num_mcq=3, num_short=3):
-    questions = []
-    for i, para in enumerate(paragraphs[: num_mcq + num_short]):
-        if i < num_mcq:
-            questions.append(f"MCQ {i+1}: What is a key idea from this paragraph?\n -> {para[:80]}...")
-        else:
-            questions.append(f"Short Q {i+1-num_mcq}: Explain briefly: {para[:80]}...")
-    return questions
+# --- Real Question Generation using T5 ---
 
+# Load once (can take a few seconds)
+@st.cache_resource(show_spinner=True)
+def load_qg_model(model_name="valhalla/t5-base-qg-hl"):
+    tokenizer = T5Tokenizer.from_pretrained(model_name)
+    model = T5ForConditionalGeneration.from_pretrained(model_name)
+    return tokenizer, model
+
+tokenizer, model = load_qg_model()
+
+
+def generate_questions(chunks, num_mcq=5, num_short=5, max_input_length=512):
+    questions = []
+    mcq_chunks = chunks[:num_mcq]
+    short_chunks = chunks[num_mcq:num_mcq + num_short]
+
+    def qg_from_text(text):
+        input_text = f"generate question: {text}"
+        inputs = tokenizer.encode(
+            input_text, return_tensors="pt", max_length=max_input_length, truncation=True
+        )
+        outputs = model.generate(inputs, max_length=64, num_beams=4, early_stopping=True)
+        return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    # MCQs with options
+    for i, chunk in enumerate(mcq_chunks, 1):
+        mcq = generate_mcq_with_options(chunk, tokenizer, model, max_input_length=max_input_length)
+        if mcq:
+            questions.append({
+                "type": "mcq",
+                "id": i,
+                "question": mcq["question"],
+                "options": mcq["options"],
+                "answer": mcq["answer"]
+            })
+
+    # Short-answer
+    for i, chunk in enumerate(short_chunks, 1):
+        highlighted = highlight_answer(chunk, use_spacy=True)
+        if highlighted:
+            question = qg_from_text(highlighted)
+            questions.append({
+                "type": "short",
+                "id": i,
+                "question": question
+            })
+
+    return questions
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Smart Learning Platform", layout="wide")
@@ -100,7 +142,20 @@ if uploaded_files and st.button("🔍 Extract & Generate Questions"):
         st.markdown(f"**Chunk {i}:** {c[:300]}...")
 
     # Generate mock questions
+    questions = generate_questions(chunks, num_mcq=num_mcq, num_short=num_short)
+    
+    # --- Display nicely in Streamlit ---
     st.subheader("❓ Generated Questions")
-    questions = generate_mock_questions(chunks, num_mcq, num_short)
+
     for q in questions:
-        st.write(q)
+        if q["type"] == "mcq":
+            st.markdown(f"**MCQ {q['id']}: {q['question']}**")
+            for idx, option in enumerate(q["options"], 1):
+                # Use letters A, B, C, D…
+                letter = chr(64 + idx)  # 65 is 'A'
+                st.markdown(f"{letter}) {option}")
+            st.markdown(f"**Answer:** {chr(64 + q['options'].index(q['answer']) + 1)}")
+            st.markdown("---")  # separator
+        elif q["type"] == "short":
+            st.markdown(f"**Short Q {q['id']}: {q['question']}**")
+            st.markdown("---")
