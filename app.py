@@ -2,11 +2,13 @@ import streamlit as st
 import tempfile
 import os
 import re
+import random
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from src.preprocessing.extract_text import extract_text_from_pdf
 from src.question_generation.highlight import _SPACY_AVAILABLE
 from src.question_generation.mcq import generate_mcq_with_options
 from src.question_generation.short import generate_short_question
+from src.question_generation.filters import apply_all_filters
 
 
 # --------- Sentence Splitting + Sliding Window ---------
@@ -37,9 +39,11 @@ def clean_pdf_prefix(text: str) -> str:
     return re.sub(r"\[[^\]]+\.pdf\]\s*", "", text)
 
 def clean_chunk_text(text):
+    # Remove our custom table tags using regex
+    text = re.sub(r"\[/?Table_Page\d+\]", "", text)
     # Remove PDF tags
     text = re.sub(r"\[[^\]]+\.pdf\]\s*", "", text)
-    # Remove bullets, special chars
+    # Remove bullets, special chars, and extra whitespace
     text = re.sub(r"[•\-\*\n]", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
@@ -60,26 +64,45 @@ tokenizer, model = load_qg_model()
 
 def generate_questions(chunks, num_mcq=5, num_short=5):
     questions = []
+    
+    # Shuffle chunks to get variety if we generate fewer than total chunks
+    random.shuffle(chunks)
+    
+    # --- Generate MCQs with Quality Filtering ---
+    mcq_count = 0
+    generated_mcqs = 0
+    max_attempts = len(chunks) * 2 # Try a bit harder to find good questions
+    
+    st.info(f"Generating {num_mcq} MCQs...")
+    with st.spinner('Crafting and filtering MCQs...'):
+        for i in range(max_attempts):
+            if generated_mcqs >= num_mcq:
+                break
+            chunk = chunks[i % len(chunks)] # Cycle through chunks
+            mcq = generate_mcq_with_options(chunk, tokenizer, model)
+            if mcq and apply_all_filters(mcq):
+                generated_mcqs += 1
+                mcq["id"] = generated_mcqs
+                questions.append(mcq)
 
-    mcq_chunks = chunks[:num_mcq]
-    short_chunks = chunks[num_mcq:num_mcq+num_short]
+    # --- Generate Short Answer Questions with Quality Filtering ---
+    short_q_count = 0
+    generated_short_qs = 0
 
-    # MCQs
-    for i, chunk in enumerate(mcq_chunks, 1):
-        #clean_chunk = clean_pdf_prefix(chunk)
-        clean_chunk = clean_chunk_text(chunk)
-        mcq = generate_mcq_with_options(clean_chunk, tokenizer, model)
-        if mcq:
-            mcq["id"] = i
-            questions.append(mcq)
-
-    # Short-answer
-    for i, chunk in enumerate(short_chunks, 1):
-        clean_chunk = clean_pdf_prefix(chunk)
-        sa = generate_short_question(clean_chunk, tokenizer, model)
-        if sa:
-            sa["id"] = i
-            questions.append(sa)
+    st.info(f"Generating {num_short} Short Answer questions...")
+    with st.spinner('Crafting and filtering Short Answer questions...'):
+        for i in range(max_attempts):
+            if generated_short_qs >= num_short:
+                break
+            chunk = chunks[i % len(chunks)] # Cycle through chunks
+            sa = generate_short_question(chunk, tokenizer, model)
+            # We need to create a temporary object for the filter function
+            if sa:
+                sa_obj = {"type": "short", "question": sa["question"]}
+                if apply_all_filters(sa_obj):
+                    generated_short_qs += 1
+                    sa["id"] = generated_short_qs
+                    questions.append(sa)
 
     return questions
 
@@ -130,18 +153,54 @@ if uploaded_files and st.button("🔍 Extract & Generate Questions"):
 
     st.success(f"✅ Extracted {len(all_paragraphs)} paragraphs/blocks across {len(uploaded_files)} files")
 
-    # --------- CHUNKING ---------
+    # --------- CONTEXT-AWARE CHUNKING ---------
+    st.info("Applying context-aware chunking...")
     chunks = []
-    for para in all_paragraphs:
-        if para.startswith("[Table_"):
-            chunks.append(para)  # keep tables as-is
-        else:
-            if len(para.split()) < 40:  # small para, keep as is
-                chunks.append(para)
-            else:
-                chunks.extend(sliding_window_chunk_sentences(para, chunk_size=chunk_size, overlap=overlap))
+    short_paragraph_buffer = ""
+    MIN_WORDS_PER_CHUNK = 40
+    MAX_WORDS_PER_CHUNK = 300 # You can adjust this value
 
-    st.success(f"✅ Prepared {len(chunks)} chunks for Question Generation")
+    for para in all_paragraphs:
+        # Keep tables as a single, intact chunk
+        if para.startswith("[Table_"):
+            # First, process any text waiting in the buffer
+            if short_paragraph_buffer:
+                chunks.append(short_paragraph_buffer.strip())
+                short_paragraph_buffer = ""
+            chunks.append(para)
+            continue
+
+        # Clean the paragraph text before processing
+        clean_para = clean_chunk_text(para)
+        word_count = len(clean_para.split())
+
+        # Case 1: Paragraph is the perfect size
+        if MIN_WORDS_PER_CHUNK <= word_count <= MAX_WORDS_PER_CHUNK:
+            # Process the buffer first
+            if short_paragraph_buffer:
+                chunks.append(short_paragraph_buffer.strip())
+                short_paragraph_buffer = ""
+            # Add the current paragraph as its own chunk
+            chunks.append(clean_para)
+
+        # Case 2: Paragraph is too long, so we slide the window
+        elif word_count > MAX_WORDS_PER_CHUNK:
+            # Process the buffer first
+            if short_paragraph_buffer:
+                chunks.append(short_paragraph_buffer.strip())
+                short_paragraph_buffer = ""
+            # Add the chunks from the long paragraph
+            chunks.extend(sliding_window_chunk_sentences(clean_para, chunk_size=chunk_size, overlap=overlap))
+
+        # Case 3: Paragraph is too short, so add it to the buffer
+        else:
+            short_paragraph_buffer += " " + clean_para
+
+    # After the loop, add any remaining text from the buffer as the last chunk
+    if short_paragraph_buffer:
+        chunks.append(short_paragraph_buffer.strip())
+
+    st.success(f"✅ Prepared {len(chunks)} high-quality chunks for Question Generation")
 
     st.write("📖 Sample Chunks")
     for i, c in enumerate(chunks[:5], 1):
