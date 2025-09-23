@@ -48,6 +48,25 @@ def clean_chunk_text(text):
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
+def create_context_windows(chunks, window_size=3, overlap=1):
+    """
+    Creates larger 'mega-chunks' by applying a sliding window over the existing chunks.
+    This gives the model more context for each question.
+    """
+    if not chunks or window_size <= 0:
+        return []
+
+    # If there are fewer chunks than the window size, just combine them all.
+    if len(chunks) <= window_size:
+        return [" ".join(chunks)]
+
+    windowed_chunks = []
+    step = window_size - overlap
+    for i in range(0, len(chunks) - window_size + 1, step):
+        window = chunks[i:i + window_size]
+        windowed_chunks.append(" ".join(window))
+    
+    return windowed_chunks
 
 
 # --- Real Question Generation using T5 ---
@@ -62,47 +81,63 @@ def load_qg_model(model_name="valhalla/t5-base-qg-hl"):
 tokenizer, model = load_qg_model()
 
 
+# In app.py
+
 def generate_questions(chunks, num_mcq=5, num_short=5):
-    questions = []
+    # STEP 1: Use the new Context Windowing function.
+    # The UI inputs for 'chunk_size' and 'overlap' now control paragraphs!
+    context_windows = create_context_windows(chunks, window_size=st.session_state.chunk_size, overlap=st.session_state.overlap)
+    if not context_windows:
+        st.warning("Not enough content to generate questions. Try a smaller PDF or different settings.")
+        return []
     
-    # Shuffle chunks to get variety if we generate fewer than total chunks
-    random.shuffle(chunks)
+    st.info(f"Created {len(context_windows)} context windows for generation.")
+
+    questions = []
+    generated_questions_set = set() # STEP 2: Use a set to track and prevent duplicates.
+    
+    random.shuffle(context_windows)
     
     # --- Generate MCQs with Quality Filtering ---
-    mcq_count = 0
     generated_mcqs = 0
-    max_attempts = len(chunks) * 2 # Try a bit harder to find good questions
+    max_attempts = len(context_windows) * 2
     
     st.info(f"Generating {num_mcq} MCQs...")
     with st.spinner('Crafting and filtering MCQs...'):
         for i in range(max_attempts):
             if generated_mcqs >= num_mcq:
                 break
-            chunk = chunks[i % len(chunks)] # Cycle through chunks
-            mcq = generate_mcq_with_options(chunk, tokenizer, model)
+            window = context_windows[i % len(context_windows)]
+            mcq = generate_mcq_with_options(window, tokenizer, model)
+
             if mcq and apply_all_filters(mcq):
-                generated_mcqs += 1
-                mcq["id"] = generated_mcqs
-                questions.append(mcq)
+                q_text = mcq['question'].strip().lower()
+                if q_text not in generated_questions_set:
+                    generated_questions_set.add(q_text)
+                    generated_mcqs += 1
+                    mcq["id"] = generated_mcqs
+                    questions.append(mcq)
 
     # --- Generate Short Answer Questions with Quality Filtering ---
-    short_q_count = 0
     generated_short_qs = 0
-
+    
     st.info(f"Generating {num_short} Short Answer questions...")
     with st.spinner('Crafting and filtering Short Answer questions...'):
         for i in range(max_attempts):
             if generated_short_qs >= num_short:
                 break
-            chunk = chunks[i % len(chunks)] # Cycle through chunks
-            sa = generate_short_question(chunk, tokenizer, model)
-            # We need to create a temporary object for the filter function
+            window = context_windows[i % len(context_windows)]
+            sa = generate_short_question(window, tokenizer, model)
+
             if sa:
                 sa_obj = {"type": "short", "question": sa["question"]}
                 if apply_all_filters(sa_obj):
-                    generated_short_qs += 1
-                    sa["id"] = generated_short_qs
-                    questions.append(sa)
+                    q_text = sa['question'].strip().lower()
+                    if q_text not in generated_questions_set:
+                        generated_questions_set.add(q_text)
+                        generated_short_qs += 1
+                        sa["id"] = generated_short_qs
+                        questions.append(sa)
 
     return questions
 
@@ -124,8 +159,9 @@ backend = st.radio("Choose extraction backend", ["pypdf2", "pymupdf"])
 # Options
 num_mcq = st.number_input("Number of MCQs", min_value=1, max_value=20, value=5)
 num_short = st.number_input("Number of Short Questions", min_value=1, max_value=20, value=5)
-chunk_size = st.number_input("Chunk sentences", min_value=2, max_value=20, value=6)
-overlap = st.number_input("Overlap sentences", min_value=0, max_value=10, value=2)
+st.number_input("Paragraphs per Chunk", min_value=1, max_value=20, value=3, key="chunk_size")
+st.number_input("Overlap Paragraphs", min_value=0, max_value=10, value=1, key="overlap")
+
 
 if uploaded_files and st.button("🔍 Extract & Generate Questions"):
     all_paragraphs = []
