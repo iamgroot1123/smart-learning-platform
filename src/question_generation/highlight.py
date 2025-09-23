@@ -48,8 +48,8 @@ def _ensure_nlp(model_name: str = "en_core_web_sm"):
 
 def highlight_answer_spacy(text: str, model_name: str = "en_core_web_sm") -> str:
     """
-    Use spaCy to pick a good answer candidate and highlight it.
-    NEW HIERARCHY: Prioritizes specific named entities first.
+    Use spaCy to pick a good answer candidate and highlight it:
+    wraps selected text with <answer>...</answer>
     """
     if not _SPACY_AVAILABLE:
         raise ImportError("spaCy is not available")
@@ -57,26 +57,31 @@ def highlight_answer_spacy(text: str, model_name: str = "en_core_web_sm") -> str
     nlp = _ensure_nlp(model_name)
     doc = nlp(text)
 
-    # 1) Try proper nouns / named entities FIRST (PERSON, ORG, GPE, LOC, PRODUCT, WORK_OF_ART, ETC.)
-    # This gives us specific, high-quality answers.
-    ents = [
-        ent.text.strip() for ent in doc.ents 
-        if ent.label_ in {"PERSON", "ORG", "GPE", "LOC", "PRODUCT", "EVENT", "WORK_OF_ART", "FAC"} 
-        and len(ent.text.strip()) > 2
-    ]
-    if ents:
-        # Prioritize longer entities as they are often more specific
-        ents.sort(key=lambda s: (-len(s.split()), -len(s)))
-        return _wrap_first_occurrence(text, ents[0])
-
-    # 2) Fallback to noun chunks (multi-word nouns)
-    noun_chunks = [nc.text.strip() for nc in doc.noun_chunks if len(nc.text.strip()) > 3]
+    # 1) Try noun chunks (multi-word nouns) — prefer longer chunk
+    noun_chunks = [nc.text.strip() for nc in doc.noun_chunks if len(nc.text.strip()) > 2]
     if noun_chunks:
+        # prioritize by length (more informative) then randomness
         noun_chunks.sort(key=lambda s: (-len(s.split()), -len(s)))
         choice = noun_chunks[0]
         return _wrap_first_occurrence(text, choice)
 
-    # 3) Last resort: fallback to a regex-based pick
+    # 2) Try proper nouns / named entities (PERSON, ORG, GPE, LOC, PRODUCT...)
+    ents = [ent.text.strip() for ent in doc.ents if ent.label_ in {"PERSON", "ORG", "GPE", "LOC", "PRODUCT"}]
+    if ents:
+        # pick longest
+        ents.sort(key=lambda s: (-len(s.split()), -len(s)))
+        return _wrap_first_occurrence(text, ents[0])
+
+    # 3) Try noun tokens (NN, NNS, NNPS, NNP)
+    nouns = [tok.text for tok in doc if tok.pos_ == "NOUN" or tok.pos_ == "PROPN"]
+    if nouns:
+        # pick the longest noun token
+        nouns = [n for n in nouns if len(n) > 3]
+        if nouns:
+            nouns.sort(key=lambda s: (-len(s), s))
+            return _wrap_first_occurrence(text, nouns[0])
+
+    # 4) fallback to a regex-based pick (long-ish words)
     return _wrap_first_occurrence_regex(text)
 
 
