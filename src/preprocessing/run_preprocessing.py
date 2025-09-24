@@ -2,7 +2,7 @@ import argparse
 import os
 from .preprocessing import preprocess_material
 
-DEFAULT_PDF = "data/raw/sample.pdf"
+DEFAULT_PDF = "data/raw/sample2.pdf"
 
 def main():
     parser = argparse.ArgumentParser(description="Run preprocessing on a PDF")

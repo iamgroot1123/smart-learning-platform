@@ -1,7 +1,5 @@
 import re
 
-import re
-
 def split_into_paragraphs(text: str) -> list[str]:
     """
     Split raw text into clean paragraphs while keeping table blocks intact.
