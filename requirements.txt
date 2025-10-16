@@ -2,7 +2,7 @@ transformers
 torch
 scikit-learn
 sentence-transformers
-streamlit
+flask
 PyPDF2
 pdfplumber
 pymupdf

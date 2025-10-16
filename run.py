@@ -1,4 +1,4 @@
-import streamlit as st
+from flask import Flask, request, render_template, flash, redirect, url_for
 import tempfile
 import os
 import re
@@ -10,6 +10,8 @@ from src.question_generation.mcq import generate_mcq_with_options
 from src.question_generation.short import generate_short_question
 from src.question_generation.filters import apply_all_filters
 
+app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'  # Change this to a secure secret key
 
 # --------- Sentence Splitting + Sliding Window ---------
 _SENT_SPLIT_RE = re.compile(r'(?<=[\.\?\!])\s+(?=[A-Z0-9\"\'\(\[])')
@@ -48,12 +50,9 @@ def clean_chunk_text(text):
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-
-
 # --- Real Question Generation using T5 ---
 
 # Load once (can take a few seconds)
-@st.cache_resource(show_spinner=True)
 def load_qg_model(model_name="valhalla/t5-base-qg-hl"):
     tokenizer = T5Tokenizer.from_pretrained(model_name)
     model = T5ForConditionalGeneration.from_pretrained(model_name)
@@ -61,81 +60,79 @@ def load_qg_model(model_name="valhalla/t5-base-qg-hl"):
 
 tokenizer, model = load_qg_model()
 
-
 def generate_questions(chunks, num_mcq=5, num_short=5):
     questions = []
-    
+
     # Shuffle chunks to get variety if we generate fewer than total chunks
     random.shuffle(chunks)
-    
+
     # --- Generate MCQs with Quality Filtering ---
     mcq_count = 0
     generated_mcqs = 0
-    max_attempts = len(chunks) * 2 # Try a bit harder to find good questions
-    
-    st.info(f"Generating {num_mcq} MCQs...")
-    with st.spinner('Crafting and filtering MCQs...'):
-        for i in range(max_attempts):
-            if generated_mcqs >= num_mcq:
-                break
-            chunk = chunks[i % len(chunks)] # Cycle through chunks
-            mcq = generate_mcq_with_options(chunk, tokenizer, model)
-            if mcq and apply_all_filters(mcq):
-                generated_mcqs += 1
-                mcq["id"] = generated_mcqs
-                questions.append(mcq)
+    max_attempts = len(chunks) * 2  # Try a bit harder to find good questions
+
+    print(f"Generating {num_mcq} MCQs...")
+    for i in range(max_attempts):
+        if generated_mcqs >= num_mcq:
+            break
+        chunk = chunks[i % len(chunks)]  # Cycle through chunks
+        mcq = generate_mcq_with_options(chunk, tokenizer, model)
+        if mcq and apply_all_filters(mcq):
+            generated_mcqs += 1
+            mcq["id"] = generated_mcqs
+            questions.append(mcq)
 
     # --- Generate Short Answer Questions with Quality Filtering ---
     short_q_count = 0
     generated_short_qs = 0
 
-    st.info(f"Generating {num_short} Short Answer questions...")
-    with st.spinner('Crafting and filtering Short Answer questions...'):
-        for i in range(max_attempts):
-            if generated_short_qs >= num_short:
-                break
-            chunk = chunks[i % len(chunks)] # Cycle through chunks
-            sa = generate_short_question(chunk, tokenizer, model)
-            # We need to create a temporary object for the filter function
-            if sa:
-                sa_obj = {"type": "short", "question": sa["question"]}
-                if apply_all_filters(sa_obj):
-                    generated_short_qs += 1
-                    sa["id"] = generated_short_qs
-                    questions.append(sa)
+    print(f"Generating {num_short} Short Answer questions...")
+    for i in range(max_attempts):
+        if generated_short_qs >= num_short:
+            break
+        chunk = chunks[i % len(chunks)]  # Cycle through chunks
+        sa = generate_short_question(chunk, tokenizer, model)
+        # We need to create a temporary object for the filter function
+        if sa:
+            sa_obj = {"type": "short", "question": sa["question"]}
+            if apply_all_filters(sa_obj):
+                generated_short_qs += 1
+                sa["id"] = generated_short_qs
+                questions.append(sa)
 
     return questions
 
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="Smart Learning Platform", layout="wide")
+@app.route('/generate', methods=['POST'])
+def generate():
+    if 'files' not in request.files:
+        flash('No file part')
+        return redirect(request.url)
 
-st.title("📘 Smart Learning Platform")
-st.write("Upload your study material and generate questions automatically!")
+    files = request.files.getlist('files')
+    if not files or files[0].filename == '':
+        flash('No selected file')
+        return redirect(request.url)
 
-# File uploader
-uploaded_files = st.file_uploader(
-    "Upload PDF files (you can select multiple)", type=["pdf"], accept_multiple_files=True
-)
+    backend = request.form.get('backend', 'pypdf2')
+    num_mcq = int(request.form.get('num_mcq', 5))
+    num_short = int(request.form.get('num_short', 5))
+    chunk_size = int(request.form.get('chunk_size', 6))
+    overlap = int(request.form.get('overlap', 2))
 
-# Backend selector (👉 needs to come BEFORE we call extract_text)
-backend = st.radio("Choose extraction backend", ["pypdf2", "pymupdf"])
-
-# Options
-num_mcq = st.number_input("Number of MCQs", min_value=1, max_value=20, value=5)
-num_short = st.number_input("Number of Short Questions", min_value=1, max_value=20, value=5)
-chunk_size = st.number_input("Chunk sentences", min_value=2, max_value=20, value=6)
-overlap = st.number_input("Overlap sentences", min_value=0, max_value=10, value=2)
-
-if uploaded_files and st.button("🔍 Extract & Generate Questions"):
     all_paragraphs = []
-    for uploaded_file in uploaded_files:
+    for uploaded_file in files:
+        if uploaded_file.filename == '':
+            continue
         # save temp
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(uploaded_file.read())
             temp_path = tmp.name
 
-        st.info(f"Processing: {uploaded_file.name}")
+        print(f"Processing: {uploaded_file.filename}")
         text_or_blocks = extract_text_from_pdf(temp_path, backend=backend)
 
         # If pypdf2 returns string, split into paragraphs
@@ -145,20 +142,20 @@ if uploaded_files and st.button("🔍 Extract & Generate Questions"):
             paras = text_or_blocks  # pymupdf already returns list[str]
 
         # tag paragraphs with filename
-        paras = [f"[{uploaded_file.name}] {p}" for p in paras]
+        paras = [f"[{uploaded_file.filename}] {p}" for p in paras]
         all_paragraphs.extend(paras)
 
         # cleanup
         os.remove(temp_path)
 
-    st.success(f"✅ Extracted {len(all_paragraphs)} paragraphs/blocks across {len(uploaded_files)} files")
+    print(f"✅ Extracted {len(all_paragraphs)} paragraphs/blocks across {len(files)} files")
 
     # --------- CONTEXT-AWARE CHUNKING ---------
-    st.info("Applying context-aware chunking...")
+    print("Applying context-aware chunking...")
     chunks = []
     short_paragraph_buffer = ""
     MIN_WORDS_PER_CHUNK = 40
-    MAX_WORDS_PER_CHUNK = 300 # You can adjust this value
+    MAX_WORDS_PER_CHUNK = 300  # You can adjust this value
 
     for para in all_paragraphs:
         # Keep tables as a single, intact chunk
@@ -200,25 +197,12 @@ if uploaded_files and st.button("🔍 Extract & Generate Questions"):
     if short_paragraph_buffer:
         chunks.append(short_paragraph_buffer.strip())
 
-    st.success(f"✅ Prepared {len(chunks)} high-quality chunks for Question Generation")
+    print(f"✅ Prepared {len(chunks)} high-quality chunks for Question Generation")
 
-    st.write("📖 Sample Chunks")
-    for i, c in enumerate(chunks[:5], 1):
-        st.markdown(f"**Chunk {i}:** {c[:300]}...")
-
-    # Generate mock questions
+    # Generate questions
     questions = generate_questions(chunks, num_mcq=num_mcq, num_short=num_short)
-    
-    # --- Display nicely in Streamlit ---
-    st.subheader("❓ Generated Questions")
 
-    for q in questions:
-        if q["type"] == "mcq":
-            st.write(f"MCQ {q['id']}: {q['question']}")
-            option_labels = ["A", "B", "C", "D"]
-            for idx, opt in enumerate(q["options"]):
-                st.write(f"{option_labels[idx]}) {opt}")
-            correct_idx = q["options"].index(q["answer"])
-            st.write(f"Answer: {option_labels[correct_idx]}")
-        else:
-            st.write(f"Short Q {q['id']}: {q['question']}")
+    return render_template('results.html', chunks=chunks, questions=questions)
+
+if __name__ == '__main__':
+    app.run(debug=True)
