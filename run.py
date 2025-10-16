@@ -1,9 +1,34 @@
-from flask import Flask, request, render_template, flash, redirect, url_for
+from flask import Flask, request, render_template, flash, redirect, url_for, jsonify
 import tempfile
 import os
 import re
 import random
 from transformers import T5ForConditionalGeneration, T5Tokenizer
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+import string
+
+# Download NLTK data if not present
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab')
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
+
 from src.preprocessing.extract_text import extract_text_from_pdf
 from src.question_generation.highlight import _SPACY_AVAILABLE
 from src.question_generation.mcq import generate_mcq_with_options
@@ -60,6 +85,13 @@ def load_qg_model(model_name="valhalla/t5-base-qg-hl"):
 
 tokenizer, model = load_qg_model()
 
+# Load SBERT model for evaluation
+sbert_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# Initialize NLTK tools
+stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer()
+
 def generate_questions(chunks, num_mcq=5, num_short=5):
     questions = []
 
@@ -101,6 +133,57 @@ def generate_questions(chunks, num_mcq=5, num_short=5):
                 questions.append(sa)
 
     return questions
+
+def preprocess_text(text):
+    """
+    Preprocess text: lowercase, remove stopwords, lemmatize, strip punctuation and whitespace.
+    """
+    # Lowercase
+    text = text.lower()
+    # Remove punctuation
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    # Tokenize
+    words = nltk.word_tokenize(text)
+    # Remove stopwords and lemmatize
+    words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
+    # Join back
+    return ' '.join(words).strip()
+
+def evaluate_short_answer(user_answer, correct_answer):
+    """
+    Evaluate short answer using SBERT and cosine similarity.
+    """
+    # Preprocess both answers
+    user_processed = preprocess_text(user_answer)
+    correct_processed = preprocess_text(correct_answer)
+
+    # Generate embeddings
+    user_embedding = sbert_model.encode([user_processed])
+    correct_embedding = sbert_model.encode([correct_processed])
+
+    # Compute cosine similarity
+    similarity = cosine_similarity(user_embedding, correct_embedding)[0][0]
+
+    # Map to percentage
+    percentage = int(similarity * 100)
+
+    # Determine status
+    if similarity >= 0.85:
+        status = "Correct"
+        color = "green"
+    elif similarity >= 0.65:
+        status = "Partially correct"
+        color = "orange"
+    else:
+        status = "Incorrect"
+        color = "red"
+
+    return {
+        "similarity": percentage,
+        "status": status,
+        "color": color,
+        "correct_answer": correct_answer
+    }
 
 @app.route('/')
 def index():
@@ -215,6 +298,20 @@ def generate():
     else:
         # Fallback to template rendering
         return render_template('results.html', chunks=chunks, questions=questions)
+
+@app.route('/evaluate_short', methods=['POST'])
+def evaluate_short():
+    data = request.get_json()
+    user_answer = data.get('user_answer', '').strip()
+    correct_answer = data.get('correct_answer', '').strip()
+    question_id = data.get('question_id')
+
+    if not user_answer or not correct_answer:
+        return jsonify({'error': 'Missing answer data'}), 400
+
+    result = evaluate_short_answer(user_answer, correct_answer)
+    result['question_id'] = question_id
+    return jsonify(result)
 
 if __name__ == '__main__':
     app.run(debug=True)

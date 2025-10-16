@@ -102,18 +102,51 @@ document.addEventListener('DOMContentLoaded', function() {
             const textarea = questionDiv.querySelector('.answer-input');
             const feedbackP = questionDiv.querySelector('.feedback');
             const userAnswer = textarea.value.trim();
+            const correctAnswer = e.target.getAttribute('data-correct-answer');
+            const questionId = e.target.getAttribute('data-question-id');
 
             if (userAnswer === '') {
                 feedbackP.textContent = 'Please enter an answer.';
                 feedbackP.style.color = 'red';
                 feedbackP.style.display = 'block';
             } else {
-                // For now, just acknowledge submission (could add AI grading later)
-                feedbackP.textContent = 'Answer submitted! (Grading feature can be added later)';
-                feedbackP.style.color = 'green';
-                feedbackP.style.display = 'block';
+                // Disable inputs
                 textarea.disabled = true;
                 e.target.disabled = true;
+
+                // Send to backend for evaluation
+                fetch('/evaluate_short', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_answer: userAnswer,
+                        correct_answer: correctAnswer,
+                        question_id: questionId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        feedbackP.textContent = 'Error evaluating answer.';
+                        feedbackP.style.color = 'red';
+                    } else {
+                        feedbackP.innerHTML = `
+                            <strong>Your answer:</strong> "${userAnswer}"<br>
+                            <strong>Correct answer:</strong> "${data.correct_answer}"<br>
+                            <strong>Similarity:</strong> ${data.similarity}%<br>
+                            <strong>Status:</strong> <span style="color: ${data.color};">${data.status}</span>
+                        `;
+                        feedbackP.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    feedbackP.textContent = 'Error evaluating answer.';
+                    feedbackP.style.color = 'red';
+                    feedbackP.style.display = 'block';
+                });
             }
         }
     });
@@ -209,7 +242,7 @@ function renderResults() {
             <div class="question short-question">
                 <h3>Short Q ${q.id}: ${q.question}</h3>
                 <textarea class="answer-input" placeholder="Enter your answer here..."></textarea>
-                <button class="submit-answer-btn">Submit Answer</button>
+                <button class="submit-answer-btn" data-correct-answer="${q.answer}" data-question-id="${q.id}">Submit Answer</button>
                 <p class="feedback" style="display: none;"></p>
             </div>
         `).join('');
