@@ -62,8 +62,28 @@
         <!-- Take Quiz Tab -->
         <div id="quiz-tab" class="tab-content">
             <h2>❓ Generated Questions</h2>
-            <div id="results-container">
-                <!-- Chunks and Questions will be dynamically inserted here -->
+            <div id="chunks-container">
+                <!-- Chunks will be dynamically inserted here -->
+            </div>
+
+            <!-- Sub-tabs for question types -->
+            <nav class="sub-tabs">
+                <button class="sub-tab-button active" data-subtab="mcq">MCQs</button>
+                <button class="sub-tab-button" data-subtab="short">Short Answers</button>
+            </nav>
+
+            <!-- MCQ Sub-tab -->
+            <div id="mcq-subtab" class="sub-tab-content active">
+                <div id="mcq-container">
+                    <!-- MCQs will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Short Answers Sub-tab -->
+            <div id="short-subtab" class="sub-tab-content">
+                <div id="short-container">
+                    <!-- Short Answers will be dynamically inserted here -->
+                </div>
             </div>
         </div>
     </div>

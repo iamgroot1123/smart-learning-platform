@@ -24,6 +24,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Sub-tab switching functionality
+    const subTabButtons = document.querySelectorAll('.sub-tab-button');
+    const subTabContents = document.querySelectorAll('.sub-tab-content');
+
+    subTabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const subTabName = this.getAttribute('data-subtab');
+
+            // Remove active class from all sub-buttons and sub-contents
+            subTabButtons.forEach(btn => btn.classList.remove('active'));
+            subTabContents.forEach(content => content.classList.remove('active'));
+
+            // Add active class to clicked sub-button and corresponding sub-content
+            this.classList.add('active');
+            document.getElementById(subTabName + '-subtab').classList.add('active');
+        });
+    });
+
     // Form submission via AJAX
     const form = document.getElementById('upload-form');
     if (form) {
@@ -67,48 +85,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Function to render chunks and questions
 function renderResults() {
-    const container = document.getElementById('results-container');
-    container.innerHTML = '';
-
     // Render chunks
+    const chunksContainer = document.getElementById('chunks-container');
+    chunksContainer.innerHTML = '';
     if (chunks.length > 0) {
-        const chunksSection = document.createElement('div');
-        chunksSection.innerHTML = '<h2>📖 Sample Chunks</h2><ul>' +
+        chunksContainer.innerHTML = '<h2>📖 Sample Chunks</h2><ul>' +
             chunks.slice(0, 5).map((chunk, index) =>
                 `<li><strong>Chunk ${index + 1}:</strong> ${chunk.substring(0, 300)}...</li>`
             ).join('') +
             '</ul>';
-        container.appendChild(chunksSection);
+    } else {
+        chunksContainer.innerHTML = '<p>No chunks available.</p>';
     }
 
-    // Render questions
-    if (questions.length > 0) {
-        const questionsSection = document.createElement('div');
-        questionsSection.className = 'questions';
-        questionsSection.innerHTML = '<h2>Questions</h2>' +
-            questions.map(q => {
-                if (q.type === 'mcq') {
-                    return `
-                        <div class="question">
-                            <h3>MCQ ${q.id}: ${q.question}</h3>
-                            <ul>
-                                ${q.options.map(option => `<li>${option}</li>`).join('')}
-                            </ul>
-                            <p><strong>Answer:</strong> ${q.answer}</p>
-                        </div>
-                    `;
-                } else {
-                    return `
-                        <div class="question">
-                            <h3>Short Q ${q.id}: ${q.question}</h3>
-                        </div>
-                    `;
-                }
-            }).join('');
-        container.appendChild(questionsSection);
+    // Separate MCQs and Short Answers
+    const mcqs = questions.filter(q => q.type === 'mcq');
+    const shorts = questions.filter(q => q.type === 'short');
+
+    // Render MCQs
+    const mcqContainer = document.getElementById('mcq-container');
+    mcqContainer.innerHTML = '';
+    if (mcqs.length > 0) {
+        mcqContainer.innerHTML = mcqs.map(q => `
+            <div class="question">
+                <h3>MCQ ${q.id}: ${q.question}</h3>
+                <ul>
+                    ${q.options.map(option => `<li>${option}</li>`).join('')}
+                </ul>
+                <p><strong>Answer:</strong> ${q.answer}</p>
+            </div>
+        `).join('');
+    } else {
+        mcqContainer.innerHTML = '<p>No MCQs generated.</p>';
     }
 
-    if (chunks.length === 0 && questions.length === 0) {
-        container.innerHTML = '<p>No results to display. Please upload files and generate questions.</p>';
+    // Render Short Answers
+    const shortContainer = document.getElementById('short-container');
+    shortContainer.innerHTML = '';
+    if (shorts.length > 0) {
+        shortContainer.innerHTML = shorts.map(q => `
+            <div class="question">
+                <h3>Short Q ${q.id}: ${q.question}</h3>
+            </div>
+        `).join('');
+    } else {
+        shortContainer.innerHTML = '<p>No Short Answer questions generated.</p>';
     }
 }
