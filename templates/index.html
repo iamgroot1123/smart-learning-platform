@@ -11,44 +11,61 @@
         <h1>📘 Smart Learning Platform</h1>
         <p>Upload your study material and generate questions automatically!</p>
 
-        <form action="/generate" method="post" enctype="multipart/form-data">
-            <div class="form-group">
-                <label for="files">Upload PDF files (you can select multiple):</label>
-                <input type="file" id="files" name="files" multiple accept=".pdf" required>
-            </div>
+        <!-- Tab Navigation -->
+        <nav class="tabs">
+            <button class="tab-button active" data-tab="study">Study Material</button>
+            <button class="tab-button" data-tab="quiz">Take Quiz</button>
+        </nav>
 
-            <div class="form-group">
-                <label>Choose extraction backend:</label>
-                <div class="radio-group">
-                    <input type="radio" id="pypdf2" name="backend" value="pypdf2" checked>
-                    <label for="pypdf2">pypdf2</label>
-                    <input type="radio" id="pymupdf" name="backend" value="pymupdf">
-                    <label for="pymupdf">pymupdf</label>
+        <!-- Study Material Tab -->
+        <div id="study-tab" class="tab-content active">
+            <form id="upload-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="files">Upload PDF files (you can select multiple):</label>
+                    <input type="file" id="files" name="files" multiple accept=".pdf" required>
                 </div>
-            </div>
 
-            <div class="form-group">
-                <label for="num_mcq">Number of MCQs:</label>
-                <input type="number" id="num_mcq" name="num_mcq" min="1" max="20" value="5" required>
-            </div>
+                <div class="form-group">
+                    <label>Choose extraction backend:</label>
+                    <div class="radio-group">
+                        <input type="radio" id="pypdf2" name="backend" value="pypdf2" checked>
+                        <label for="pypdf2">pypdf2</label>
+                        <input type="radio" id="pymupdf" name="backend" value="pymupdf">
+                        <label for="pymupdf">pymupdf</label>
+                    </div>
+                </div>
 
-            <div class="form-group">
-                <label for="num_short">Number of Short Questions:</label>
-                <input type="number" id="num_short" name="num_short" min="1" max="20" value="5" required>
-            </div>
+                <div class="form-group">
+                    <label for="num_mcq">Number of MCQs:</label>
+                    <input type="number" id="num_mcq" name="num_mcq" min="1" max="20" value="5" required>
+                </div>
 
-            <div class="form-group">
-                <label for="chunk_size">Chunk sentences:</label>
-                <input type="number" id="chunk_size" name="chunk_size" min="2" max="20" value="6" required>
-            </div>
+                <div class="form-group">
+                    <label for="num_short">Number of Short Questions:</label>
+                    <input type="number" id="num_short" name="num_short" min="1" max="20" value="5" required>
+                </div>
 
-            <div class="form-group">
-                <label for="overlap">Overlap sentences:</label>
-                <input type="number" id="overlap" name="overlap" min="0" max="10" value="2" required>
-            </div>
+                <div class="form-group">
+                    <label for="chunk_size">Chunk sentences:</label>
+                    <input type="number" id="chunk_size" name="chunk_size" min="2" max="20" value="6" required>
+                </div>
 
-            <button type="submit" class="btn">🔍 Extract & Generate Questions</button>
-        </form>
+                <div class="form-group">
+                    <label for="overlap">Overlap sentences:</label>
+                    <input type="number" id="overlap" name="overlap" min="0" max="10" value="2" required>
+                </div>
+
+                <button type="submit" class="btn">🔍 Extract & Generate Questions</button>
+            </form>
+        </div>
+
+        <!-- Take Quiz Tab -->
+        <div id="quiz-tab" class="tab-content">
+            <h2>❓ Generated Questions</h2>
+            <div id="results-container">
+                <!-- Chunks and Questions will be dynamically inserted here -->
+            </div>
+        </div>
     </div>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>

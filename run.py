@@ -108,12 +108,19 @@ def index():
 
 @app.route('/generate', methods=['POST'])
 def generate():
+    # Check if request is AJAX (for SPA)
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
     if 'files' not in request.files:
+        if is_ajax:
+            return {'error': 'No file part'}, 400
         flash('No file part')
         return redirect(request.url)
 
     files = request.files.getlist('files')
     if not files or files[0].filename == '':
+        if is_ajax:
+            return {'error': 'No selected file'}, 400
         flash('No selected file')
         return redirect(request.url)
 
@@ -202,7 +209,12 @@ def generate():
     # Generate questions
     questions = generate_questions(chunks, num_mcq=num_mcq, num_short=num_short)
 
-    return render_template('results.html', chunks=chunks, questions=questions)
+    if is_ajax:
+        # Return JSON for SPA
+        return {'chunks': chunks, 'questions': questions}
+    else:
+        # Fallback to template rendering
+        return render_template('results.html', chunks=chunks, questions=questions)
 
 if __name__ == '__main__':
     app.run(debug=True)
