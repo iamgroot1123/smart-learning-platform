@@ -42,12 +42,59 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Event delegation for dynamic elements (reveal answer buttons)
+    // Event delegation for dynamic elements (reveal answer buttons and MCQ submit)
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('reveal-btn')) {
             const answerP = e.target.nextElementSibling;
             answerP.style.display = 'block';
             e.target.style.display = 'none';
+        }
+
+        if (e.target.classList.contains('submit-mcq-btn')) {
+            const questionDiv = e.target.closest('.mcq-question');
+            const form = questionDiv.querySelector('.mcq-form');
+            const selectedOption = form.querySelector('input[name^="mcq-"]:checked');
+            const evaluationDiv = questionDiv.querySelector('.evaluation');
+            const correctAnswer = e.target.getAttribute('data-answer');
+            const options = JSON.parse(e.target.getAttribute('data-options'));
+
+            if (!selectedOption) {
+                evaluationDiv.innerHTML = '<p style="color: red;">Please select an answer before submitting.</p>';
+                evaluationDiv.style.display = 'block';
+                return;
+            }
+
+            const userAnswer = selectedOption.value;
+            const isCorrect = userAnswer === correctAnswer;
+
+            // Disable form and button
+            form.querySelectorAll('input').forEach(input => input.disabled = true);
+            e.target.disabled = true;
+
+            // Display all options with labels
+            const optionsHtml = options.map((option, index) => {
+                const label = String.fromCharCode(65 + index);
+                let style = '';
+                if (option === correctAnswer) {
+                    style = 'color: green; font-weight: bold;';
+                } else if (option === userAnswer && !isCorrect) {
+                    style = 'color: red;';
+                }
+                return `<p style="${style}">${label}. ${option}</p>`;
+            }).join('');
+
+            if (isCorrect) {
+                evaluationDiv.innerHTML = `
+                    <p style="color: green; font-weight: bold;">Correct!</p>
+                    ${optionsHtml}
+                `;
+            } else {
+                evaluationDiv.innerHTML = `
+                    <p style="color: red; font-weight: bold;">Wrong!</p>
+                    ${optionsHtml}
+                `;
+            }
+            evaluationDiv.style.display = 'block';
         }
 
         if (e.target.classList.contains('submit-answer-btn')) {
@@ -142,12 +189,12 @@ function renderResults() {
                     ${q.options.map((option, index) => `
                         <label class="option">
                             <input type="radio" name="mcq-${q.id}" value="${option}">
-                            ${option}
+                            <span class="option-label">${String.fromCharCode(65 + index)}.</span> ${option}
                         </label>
                     `).join('')}
                 </form>
-                <button class="reveal-btn" data-answer="${q.answer}">Reveal Answer</button>
-                <p class="answer" style="display: none;"><strong>Correct Answer:</strong> ${q.answer}</p>
+                <button class="submit-mcq-btn" data-answer="${q.answer}" data-options='${JSON.stringify(q.options)}'>Submit Answer</button>
+                <div class="evaluation" style="display: none;"></div>
             </div>
         `).join('');
     } else {

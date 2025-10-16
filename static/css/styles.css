@@ -172,6 +172,37 @@ ul li {
     margin-right: 8px;
 }
 
+.option-label {
+    font-weight: bold;
+    margin-right: 5px;
+}
+
+.submit-mcq-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.submit-mcq-btn:hover {
+    background-color: #0056b3;
+}
+
+.submit-mcq-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.evaluation {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+}
+
 .reveal-btn {
     background-color: #28a745;
     color: white;
