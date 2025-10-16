@@ -1,2 +1,0 @@
-from .extract_text import extract_text_from_pdf
-from .paragraph_splitter import split_into_paragraphs
