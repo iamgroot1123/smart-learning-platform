@@ -42,6 +42,35 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Event delegation for dynamic elements (reveal answer buttons)
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('reveal-btn')) {
+            const answerP = e.target.nextElementSibling;
+            answerP.style.display = 'block';
+            e.target.style.display = 'none';
+        }
+
+        if (e.target.classList.contains('submit-answer-btn')) {
+            const questionDiv = e.target.closest('.short-question');
+            const textarea = questionDiv.querySelector('.answer-input');
+            const feedbackP = questionDiv.querySelector('.feedback');
+            const userAnswer = textarea.value.trim();
+
+            if (userAnswer === '') {
+                feedbackP.textContent = 'Please enter an answer.';
+                feedbackP.style.color = 'red';
+                feedbackP.style.display = 'block';
+            } else {
+                // For now, just acknowledge submission (could add AI grading later)
+                feedbackP.textContent = 'Answer submitted! (Grading feature can be added later)';
+                feedbackP.style.color = 'green';
+                feedbackP.style.display = 'block';
+                textarea.disabled = true;
+                e.target.disabled = true;
+            }
+        }
+    });
+
     // Form submission via AJAX
     const form = document.getElementById('upload-form');
     if (form) {
@@ -107,12 +136,18 @@ function renderResults() {
     mcqContainer.innerHTML = '';
     if (mcqs.length > 0) {
         mcqContainer.innerHTML = mcqs.map(q => `
-            <div class="question">
+            <div class="question mcq-question">
                 <h3>MCQ ${q.id}: ${q.question}</h3>
-                <ul>
-                    ${q.options.map(option => `<li>${option}</li>`).join('')}
-                </ul>
-                <p><strong>Answer:</strong> ${q.answer}</p>
+                <form class="mcq-form">
+                    ${q.options.map((option, index) => `
+                        <label class="option">
+                            <input type="radio" name="mcq-${q.id}" value="${option}">
+                            ${option}
+                        </label>
+                    `).join('')}
+                </form>
+                <button class="reveal-btn" data-answer="${q.answer}">Reveal Answer</button>
+                <p class="answer" style="display: none;"><strong>Correct Answer:</strong> ${q.answer}</p>
             </div>
         `).join('');
     } else {
@@ -124,8 +159,11 @@ function renderResults() {
     shortContainer.innerHTML = '';
     if (shorts.length > 0) {
         shortContainer.innerHTML = shorts.map(q => `
-            <div class="question">
+            <div class="question short-question">
                 <h3>Short Q ${q.id}: ${q.question}</h3>
+                <textarea class="answer-input" placeholder="Enter your answer here..."></textarea>
+                <button class="submit-answer-btn">Submit Answer</button>
+                <p class="feedback" style="display: none;"></p>
             </div>
         `).join('');
     } else {

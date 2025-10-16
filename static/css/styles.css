@@ -156,3 +156,73 @@ ul {
 ul li {
     margin-bottom: 5px;
 }
+
+/* MCQ Styles */
+.mcq-form {
+    margin: 10px 0;
+}
+
+.option {
+    display: block;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+.option input[type="radio"] {
+    margin-right: 8px;
+}
+
+.reveal-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.reveal-btn:hover {
+    background-color: #218838;
+}
+
+.answer {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #007bff;
+}
+
+/* Short Answer Styles */
+.answer-input {
+    width: 100%;
+    height: 80px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.submit-answer-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.submit-answer-btn:hover {
+    background-color: #0056b3;
+}
+
+.submit-answer-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.feedback {
+    margin-top: 10px;
+    font-weight: bold;
+}
