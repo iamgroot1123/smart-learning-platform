@@ -242,7 +242,7 @@ function renderResults() {
             <div class="question short-question">
                 <h3>Short Q ${q.id}: ${q.question}</h3>
                 <textarea class="answer-input" placeholder="Enter your answer here..."></textarea>
-                <button class="submit-answer-btn" data-correct-answer="${q.answer}" data-question-id="${q.id}">Submit Answer</button>
+                <button class="submit-answer-btn" data-correct-answer="${q.correct_answer}" data-question-id="${q.id}">Submit Answer</button>
                 <p class="feedback" style="display: none;"></p>
             </div>
         `).join('');

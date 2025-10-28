@@ -7,5 +7,7 @@ PyPDF2
 pdfplumber
 pymupdf
 sentencepiece
-sentence-transformers
 spacy
+faiss-cpu
+numpy
+nltk
