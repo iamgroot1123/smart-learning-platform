@@ -1,2 +1,22 @@
+# Virtual environment
 .myenv
+
+# Python bytecode
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Generated files
+mcq_questions.xlsx
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
