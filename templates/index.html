@@ -1,82 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Smart Learning Platform</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-</head>
-<body>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}" />
+  </head>
+  <body>
     <div class="container">
-        <h1>📘 Smart Learning Platform</h1>
-        <p>Upload your study material and generate questions automatically!</p>
+      <h1>📘 Smart Learning Platform</h1>
+      <p>Upload your study material and generate questions automatically!</p>
 
-        <!-- Tab Navigation -->
-        <nav class="tabs">
-            <button class="tab-button active" data-tab="study">Study Material</button>
-            <button class="tab-button" data-tab="quiz">Take Quiz</button>
+      <!-- Tab Navigation -->
+      <nav class="tabs">
+        <button class="tab-button active" data-tab="study">
+          Study Material
+        </button>
+        <button class="tab-button" data-tab="quiz">Take Quiz</button>
+      </nav>
+
+      <!-- Study Material Tab -->
+      <div id="study-tab" class="tab-content active">
+        <form id="upload-form" enctype="multipart/form-data">
+          <div class="form-group">
+            <label for="files"
+              >Upload PDF files (you can select multiple):</label
+            >
+            <input
+              type="file"
+              id="files"
+              name="files"
+              multiple
+              accept=".pdf"
+              required />
+          </div>
+
+          <div class="form-group">
+            <label for="num_mcq">Number of MCQs:</label>
+            <input
+              type="number"
+              id="num_mcq"
+              name="num_mcq"
+              min="1"
+              max="20"
+              value="5"
+              required />
+          </div>
+
+          <div class="form-group">
+            <label for="num_short">Number of Short Questions:</label>
+            <input
+              type="number"
+              id="num_short"
+              name="num_short"
+              min="1"
+              max="20"
+              value="5"
+              required />
+          </div>
+
+          <button type="submit" class="btn">
+            🔍 Extract & Generate Questions
+          </button>
+        </form>
+      </div>
+
+      <!-- Take Quiz Tab -->
+      <div id="quiz-tab" class="tab-content">
+        <h2>❓ Generated Questions</h2>
+        <div id="chunks-container">
+          <!-- Chunks will be dynamically inserted here -->
+        </div>
+
+        <!-- Sub-tabs for question types -->
+        <nav class="sub-tabs">
+          <button class="sub-tab-button active" data-subtab="mcq">MCQs</button>
+          <button class="sub-tab-button" data-subtab="short">
+            Short Answers
+          </button>
         </nav>
 
-        <!-- Study Material Tab -->
-        <div id="study-tab" class="tab-content active">
-            <form id="upload-form" enctype="multipart/form-data">
-                <div class="form-group">
-                    <label for="files">Upload PDF files (you can select multiple):</label>
-                    <input type="file" id="files" name="files" multiple accept=".pdf" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Choose extraction backend:</label>
-                    <div class="radio-group">
-                        <input type="radio" id="pypdf2" name="backend" value="pypdf2" checked>
-                        <label for="pypdf2">pypdf2</label>
-                        <input type="radio" id="pymupdf" name="backend" value="pymupdf">
-                        <label for="pymupdf">pymupdf</label>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="num_mcq">Number of MCQs:</label>
-                    <input type="number" id="num_mcq" name="num_mcq" min="1" max="20" value="5" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="num_short">Number of Short Questions:</label>
-                    <input type="number" id="num_short" name="num_short" min="1" max="20" value="5" required>
-                </div>
-
-                <button type="submit" class="btn">🔍 Extract & Generate Questions</button>
-            </form>
+        <!-- MCQ Sub-tab -->
+        <div id="mcq-subtab" class="sub-tab-content active">
+          <div id="mcq-container">
+            <!-- MCQs will be dynamically inserted here -->
+          </div>
         </div>
 
-        <!-- Take Quiz Tab -->
-        <div id="quiz-tab" class="tab-content">
-            <h2>❓ Generated Questions</h2>
-            <div id="chunks-container">
-                <!-- Chunks will be dynamically inserted here -->
-            </div>
-
-            <!-- Sub-tabs for question types -->
-            <nav class="sub-tabs">
-                <button class="sub-tab-button active" data-subtab="mcq">MCQs</button>
-                <button class="sub-tab-button" data-subtab="short">Short Answers</button>
-            </nav>
-
-            <!-- MCQ Sub-tab -->
-            <div id="mcq-subtab" class="sub-tab-content active">
-                <div id="mcq-container">
-                    <!-- MCQs will be dynamically inserted here -->
-                </div>
-            </div>
-
-            <!-- Short Answers Sub-tab -->
-            <div id="short-subtab" class="sub-tab-content">
-                <div id="short-container">
-                    <!-- Short Answers will be dynamically inserted here -->
-                </div>
-            </div>
+        <!-- Short Answers Sub-tab -->
+        <div id="short-subtab" class="sub-tab-content">
+          <div id="short-container">
+            <!-- Short Answers will be dynamically inserted here -->
+          </div>
         </div>
+      </div>
     </div>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
-</body>
+  </body>
 </html>

@@ -3,8 +3,6 @@ torch
 scikit-learn
 sentence-transformers
 flask
-PyPDF2
-pdfplumber
 pymupdf
 sentencepiece
 spacy

@@ -286,7 +286,7 @@ def generate():
         if not files or files[0].filename == '':
             return jsonify({'error': 'No selected file'}), 400 if is_ajax else redirect(request.url)
 
-        backend = request.form.get('backend', 'pypdf2')
+        # Using PyMuPDF as the default and only PDF extraction backend
         num_mcq = int(request.form.get('num_mcq', 5))
         num_short = int(request.form.get('num_short', 5))
 
@@ -297,16 +297,12 @@ def generate():
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(uploaded_file.read())
                     tmp.flush()
-                    # Try the requested backend first
-                    text_or_blocks = extract_text_from_pdf(tmp.name, backend=backend)
+                    # Extract text from PDF using PyMuPDF
+                    text_or_blocks = extract_text_from_pdf(tmp.name)
 
-                    # If nothing was extracted, try the alternative backend (pymupdf)
+                    # Log warning if no text was extracted
                     if (isinstance(text_or_blocks, str) and not text_or_blocks.strip()) or (isinstance(text_or_blocks, list) and len(text_or_blocks) == 0):
-                        try:
-                            alt_backend = 'pymupdf' if backend != 'pymupdf' else 'pypdf2'
-                            text_or_blocks = extract_text_from_pdf(tmp.name, backend=alt_backend)
-                        except Exception:
-                            pass
+                        logger.warning("No text could be extracted from the PDF file")
 
                     # Combine blocks into a single text blob
                     cleaned_text = clean_chunk_text(text_or_blocks if isinstance(text_or_blocks, str) else " ".join(text_or_blocks))

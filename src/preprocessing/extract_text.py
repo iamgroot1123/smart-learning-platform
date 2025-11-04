@@ -1,23 +1,8 @@
 import re
 from typing import List
 from collections import Counter, defaultdict
-from PyPDF2 import PdfReader
 import fitz  # PyMuPDF
 from typing import List
-
-
-# ---------------------
-# Simple PyPDF2 backend
-# ---------------------
-def extract_with_pypdf2(filepath: str) -> str:
-    """Simple text extraction with PyPDF2. Returns one big string."""
-    reader = PdfReader(filepath)
-    pages = []
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            pages.append(text)
-    return "\n".join(pages)
 
 
 # ---------------------
@@ -252,17 +237,9 @@ def extract_text_pymupdf(
 # ---------------------
 # Router / unified API
 # ---------------------
-def extract_text_from_pdf(pdf_path: str, backend: str = "pypdf2"):
+def extract_text_from_pdf(pdf_path: str):
     """
-    Unified extractor that returns a list[str] paragraphs/blocks.
-    - backend == "pypdf2": uses PyPDF2 for quick extraction, then splits into paragraphs (caller should split)
-    - backend == "pymupdf": uses the PyMuPDF extractor which returns list[str]
+    Extract text from PDF file using PyMuPDF.
+    Returns a list[str] of text blocks.
     """
-    backend = backend.lower()
-    if backend == "pypdf2":
-        # return a single string (higher-level code will split into paragraphs)
-        return extract_with_pypdf2(pdf_path)
-    elif backend == "pymupdf":
-        return extract_text_pymupdf(pdf_path, merge_tables=True)
-    else:
-        raise ValueError("Invalid backend. Choose 'pypdf2' or 'pymupdf'.")
+    return extract_text_pymupdf(pdf_path, merge_tables=True)
