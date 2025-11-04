@@ -151,43 +151,105 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Form submission via AJAX
+    // Form submission via AJAX with progress and overlay
     const form = document.getElementById('upload-form');
+    const overlay = document.getElementById('loading-overlay');
+    const loadingMessage = document.getElementById('loading-message');
+    const progressBar = document.getElementById('upload-progress');
+    const progressFill = document.getElementById('upload-progress-fill');
+
+    function showOverlay(message) {
+        if (loadingMessage) loadingMessage.textContent = message || 'Working…';
+        if (overlay) overlay.style.display = 'flex';
+    }
+    function updateProgress(percent) {
+        if (progressBar && progressFill) {
+            progressBar.style.display = 'block';
+            progressFill.style.width = Math.min(100, Math.max(0, percent)) + '%';
+        }
+    }
+    function hideOverlay() {
+        if (overlay) overlay.style.display = 'none';
+        if (progressBar && progressFill) {
+            progressBar.style.display = 'none';
+            progressFill.style.width = '0%';
+        }
+    }
+
+    function showToast(message, type = 'info', timeout = 4000) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        const t = document.createElement('div');
+        t.className = 'toast ' + (type || 'info');
+        t.textContent = message;
+        container.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; }, timeout - 500);
+        setTimeout(() => { t.remove(); }, timeout);
+    }
+
+    function disableForm() {
+        form.querySelectorAll('input, button, textarea').forEach(el => el.disabled = true);
+    }
+    function enableForm() {
+        form.querySelectorAll('input, button, textarea').forEach(el => el.disabled = false);
+    }
+
     if (form) {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
-            console.log('Form submitted via AJAX');
 
             const formData = new FormData(form);
 
-            fetch('/generate', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
+            // Use XHR to get upload progress events
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/generate');
+
+            showOverlay('Uploading files...');
+            disableForm();
+
+            xhr.upload.addEventListener('progress', function(ev) {
+                if (ev.lengthComputable) {
+                    const percent = Math.round((ev.loaded / ev.total) * 100);
+                    updateProgress(percent);
+                    loadingMessage.textContent = `Uploading files (${percent}%)`;
                 }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert('Error: ' + data.error);
-                    return;
-                }
-
-                // Store data in state
-                chunks = data.chunks || [];
-                questions = data.questions || [];
-
-                // Render results in the quiz tab
-                renderResults();
-
-                // Switch to quiz tab
-                document.querySelector('[data-tab="quiz"]').click();
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while generating questions.');
             });
+
+            xhr.addEventListener('load', function() {
+                // Upload finished; show indeterminate processing
+                updateProgress(100);
+                loadingMessage.textContent = 'Generating questions — this may take a moment.';
+            });
+
+            xhr.addEventListener('readystatechange', function() {
+                if (xhr.readyState === 4) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data.error) {
+                            showToast('Error: ' + data.error, 'error');
+                        } else {
+                            chunks = data.chunks || [];
+                            questions = data.questions || [];
+                            renderResults();
+                            document.querySelector('[data-tab="quiz"]').click();
+                            showToast('Questions generated successfully', 'success');
+                        }
+                    } catch (err) {
+                        console.error('Invalid JSON response', err);
+                        showToast('Unexpected server response', 'error');
+                    }
+                    hideOverlay();
+                    enableForm();
+                }
+            });
+
+            xhr.addEventListener('error', function() {
+                hideOverlay();
+                enableForm();
+                showToast('Network error during upload', 'error');
+            });
+
+            xhr.send(formData);
         });
     }
 });

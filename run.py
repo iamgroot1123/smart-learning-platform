@@ -65,8 +65,8 @@ app.secret_key = 'your_secret_key_here'  # Change this to a secure secret key
 # Load enhanced models for better quality
 logger.info("Loading enhanced models...")
 
-# T5-Large for better question generation
-def load_qg_model(model_name="google/t5-large-qg"):
+# T5 model for question generation
+def load_qg_model(model_name="valhalla/t5-base-qg-hl"):
     try:
         logger.info(f"Loading QG model: {model_name}")
         tokenizer = T5Tokenizer.from_pretrained(model_name)
@@ -76,8 +76,7 @@ def load_qg_model(model_name="google/t5-large-qg"):
         return tokenizer, model
     except Exception as e:
         logger.error(f"Error loading QG model: {e}")
-        # Fallback to smaller model
-        return load_qg_model("valhalla/t5-base-qg-hl")
+        raise  # Re-raise the error since we don't have another fallback
 
 # BART-Large for better answer generation
 bart_tokenizer = BartTokenizer.from_pretrained('facebook/bart-large')
@@ -383,14 +382,18 @@ def generate():
                 continue
 
         if not questions:
-            return jsonify({'error': 'Failed to generate any valid questions'}), 400 if is_ajax else redirect(url_for('index'))
+            return jsonify({'error': 'Failed to generate any valid questions'}), 400
 
-        # Return Results
-        if is_ajax:
-            return jsonify({'questions': questions})
-        else:
-            session['generated_questions'] = questions
-            return redirect(url_for('index'))
+        # Log generated content
+        logger.info(f"Generated {len(questions)} questions ({sum(1 for q in questions if q['type']=='mcq')} MCQ, {sum(1 for q in questions if q['type']=='short')} short)")
+        
+        # Always return JSON for XHR/fetch requests
+        response_data = {
+            'chunks': chunks[:5],  # Send first 5 chunks for display
+            'questions': questions
+        }
+        logger.debug(f"Returning response with {len(response_data['chunks'])} chunks and {len(response_data['questions'])} questions")
+        return jsonify(response_data)
 
     except Exception as e:
         error_msg = f"Error during question generation: {str(e)}"
