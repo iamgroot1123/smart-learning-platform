@@ -160,7 +160,36 @@ def generate_answer_from_context(question, context):
     input_text = f"question: {question} context: {context}"
     input_ids = bart_tokenizer(input_text, return_tensors='pt', max_length=1024, truncation=True)['input_ids']
     summary_ids = bart_model.generate(input_ids, num_beams=4, max_length=100, early_stopping=True)
-    return bart_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    raw_output = bart_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
+    # Post-process model output to return only the answer text.
+    # Models sometimes echo the prompt (question/context) or include labels like 'answer:'.
+    out = raw_output.strip()
+
+    # If the model emitted an explicit 'answer:' label, return everything after it.
+    match = re.search(r"answer\s*[:\-]\s*(.+)", out, flags=re.IGNORECASE | re.DOTALL)
+    if match:
+        cleaned = match.group(1).strip()
+        return cleaned
+
+    # If the output contains the question (or 'question:' marker), try to remove it.
+    # Remove prompt echoes like 'question: ...' and 'context: ...'
+    out = re.sub(r"question\s*[:].*?(?=(context\s*:|$))", "", out, flags=re.IGNORECASE | re.DOTALL)
+    out = re.sub(r"context\s*[:].*", "", out, flags=re.IGNORECASE | re.DOTALL)
+
+    # Remove any leftover repeated question text (exact match) from the beginning
+    q = question.strip()
+    if q and out.lower().startswith(q.lower()):
+        out = out[len(q):].strip(' :\"\'')
+
+    # Final cleanup: strip extra punctuation and whitespace
+    out = out.strip().strip('"').strip("'")
+
+    # If nothing meaningful remains, fall back to raw_output but try to remove prompt markers
+    if not out:
+        out = re.sub(r"question\s*[:].*|context\s*[:].*", "", raw_output, flags=re.IGNORECASE | re.DOTALL).strip()
+
+    return out
 
 def chunk_text_into_sentences(text: str, sentences_per_chunk: int = 5, overlap: int = 2) -> List[str]:
     """
@@ -388,8 +417,9 @@ def generate():
         logger.info(f"Generated {len(questions)} questions ({sum(1 for q in questions if q['type']=='mcq')} MCQ, {sum(1 for q in questions if q['type']=='short')} short)")
         
         # Always return JSON for XHR/fetch requests
+        # Do not send sample chunks to the frontend quiz view to avoid showing sample chunks
         response_data = {
-            'chunks': chunks[:5],  # Send first 5 chunks for display
+            'chunks': [],
             'questions': questions
         }
         logger.debug(f"Returning response with {len(response_data['chunks'])} chunks and {len(response_data['questions'])} questions")

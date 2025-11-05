@@ -256,17 +256,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Function to render chunks and questions
 function renderResults() {
-    // Render chunks
+    // Do not display sample chunks in the quiz view (user requested)
     const chunksContainer = document.getElementById('chunks-container');
-    chunksContainer.innerHTML = '';
-    if (chunks.length > 0) {
-        chunksContainer.innerHTML = '<h2>📖 Sample Chunks</h2><ul>' +
-            chunks.slice(0, 5).map((chunk, index) =>
-                `<li><strong>Chunk ${index + 1}:</strong> ${chunk.substring(0, 300)}...</li>`
-            ).join('') +
-            '</ul>';
-    } else {
-        chunksContainer.innerHTML = '<p>No chunks available.</p>';
+    if (chunksContainer) {
+        chunksContainer.innerHTML = '';
     }
 
     // Separate MCQs and Short Answers
